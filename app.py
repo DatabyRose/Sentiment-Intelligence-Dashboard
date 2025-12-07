@@ -8,6 +8,9 @@ import streamlit as st
 import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
+# Import the modular static tab
+from static_tab import show_static_results
+
 
 # ---------------------------------------------------------
 # Small helper: NumPy softmax (no SciPy needed)
@@ -603,7 +606,7 @@ def show_live_prediction_ensemble():
 
 
 # ---------------------------------------------------------
-# 6. MAIN APP
+# 6. MAIN APP (two tabs: Live + Static)
 # ---------------------------------------------------------
 def main():
     st.set_page_config(
@@ -626,41 +629,50 @@ def main():
         "- Live predictor: Ensemble 3 (DistilBERT + TinyBERT, logit averaging)\n"
     )
 
-    # Load data
-    data_path = "data/stage1_business_full_clean.parquet"
-    try:
-        df = load_reviews(data_path)
-    except Exception as e:
-        st.error(f"Failed to load dataset from `{data_path}`: {e}")
-        return
+    # Create tabs
+    tab1, tab2 = st.tabs(["Live Dashboard", "Static Results"])
 
-    # Apply filters via sidebar
-    df_filtered = apply_filters(df)
+    # ---------------- TAB 1: Live Dashboard ----------------
+    with tab1:
+        # Load data
+        data_path = "data/stage1_business_full_clean.parquet"
+        try:
+            df = load_reviews(data_path)
+        except Exception as e:
+            st.error(f"Failed to load dataset from `{data_path}`: {e}")
+            return
 
-    if df_filtered.empty:
-        st.warning("No data matches the selected filters.")
-    else:
-        # KPI section
-        show_kpis(df_filtered)
+        # Apply filters via sidebar
+        df_filtered = apply_filters(df)
 
-        # Charts layout: 2 x 2 grid (where bottom-right is recent negatives table)
-        top_left, top_right = st.columns(2)
-        with top_left:
-            show_sentiment_over_time(df_filtered)
-        with top_right:
-            show_star_distribution(df_filtered)
+        if df_filtered.empty:
+            st.warning("No data matches the selected filters.")
+        else:
+            # KPI section
+            show_kpis(df_filtered)
 
-        bottom_left, bottom_right = st.columns(2)
-        with bottom_left:
-            show_review_length_distribution(df_filtered)
-        with bottom_right:
-            show_recent_negative_reviews(df_filtered)
+            # Charts layout: 2 x 2 grid
+            top_left, top_right = st.columns(2)
+            with top_left:
+                show_sentiment_over_time(df_filtered)
+            with top_right:
+                show_star_distribution(df_filtered)
 
-        # Full-width most liked table
-        show_most_liked_reviews(df_filtered)
+            bottom_left, bottom_right = st.columns(2)
+            with bottom_left:
+                show_review_length_distribution(df_filtered)
+            with bottom_right:
+                show_recent_negative_reviews(df_filtered)
 
-    # Live predictor at the bottom
-    show_live_prediction_ensemble()
+            # Full-width most liked table
+            show_most_liked_reviews(df_filtered)
+
+        # Live predictor at the bottom
+        show_live_prediction_ensemble()
+
+    # ---------------- TAB 2: Static Results ----------------
+    with tab2:
+        show_static_results()
 
 
 if __name__ == "__main__":
