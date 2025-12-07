@@ -3,8 +3,6 @@ import pandas as pd
 import base64
 
 def show_static_results():
-    st.subheader("Customer Sentiment & Experience Insights")
-
     # --- PNGs ---
     st.markdown("### Key Drivers of Satisfaction and Complaints")
 
