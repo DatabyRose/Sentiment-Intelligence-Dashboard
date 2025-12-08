@@ -70,16 +70,6 @@ def load_reviews(path: str) -> pd.DataFrame:
 # 2. SIDEBAR FILTERS
 # ---------------------------------------------------------
 def apply_filters(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Create sidebar widgets and return the filtered DataFrame.
-
-    Filters:
-    - Date range (publishedatdate)
-    - Star rating range
-    - Reviewer type (all / local guides / non-local)
-    - Year (all + review_year)
-    - Month (all + review_month_name)
-    """
     st.sidebar.header("Filters")
 
     df_filtered = df.copy()
@@ -92,7 +82,6 @@ def apply_filters(df: pd.DataFrame) -> pd.DataFrame:
         if pd.isna(min_date) or pd.isna(max_date):
             date_range = None
         else:
-            # date_input expects date objects
             default_start = min_date.date()
             default_end = max_date.date()
             date_range = st.sidebar.date_input(
@@ -104,13 +93,11 @@ def apply_filters(df: pd.DataFrame) -> pd.DataFrame:
 
         if date_range and isinstance(date_range, (list, tuple)) and len(date_range) == 2:
             start_date, end_date = date_range
-            # Filter using .dt.date to avoid time boundary issues
             df_filtered = df_filtered[
                 (df_filtered["publishedatdate"].dt.date >= start_date)
                 & (df_filtered["publishedatdate"].dt.date <= end_date)
             ]
 
-    # Handle complete filter-out early
     if df_filtered.empty:
         return df_filtered
 
@@ -118,13 +105,27 @@ def apply_filters(df: pd.DataFrame) -> pd.DataFrame:
     if "stars" in df_filtered.columns:
         min_star = int(df_filtered["stars"].min())
         max_star = int(df_filtered["stars"].max())
-        star_min, star_max = st.sidebar.slider(
-            "Star rating range",
-            min_value=min_star,
-            max_value=max_star,
-            value=(min_star, max_star),
-            step=1,
-        )
+
+        if min_star == max_star:
+            # Only one star value available – show a disabled single-value slider
+            st.sidebar.slider(
+                "Star rating range",
+                min_value=min_star,
+                max_value=max_star,
+                value=min_star,
+                step=1,
+                disabled=True,
+            )
+            star_min, star_max = min_star, max_star
+        else:
+            star_min, star_max = st.sidebar.slider(
+                "Star rating range",
+                min_value=min_star,
+                max_value=max_star,
+                value=(min_star, max_star),
+                step=1,
+            )
+
         df_filtered = df_filtered[
             (df_filtered["stars"] >= star_min) & (df_filtered["stars"] <= star_max)
         ]
@@ -164,22 +165,11 @@ def apply_filters(df: pd.DataFrame) -> pd.DataFrame:
     # --- Month filter ---
     month_options = ["All"]
     month_order = [
-        "January",
-        "February",
-        "March",
-        "April",
-        "May",
-        "June",
-        "July",
-        "August",
-        "September",
-        "October",
-        "November",
-        "December",
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December",
     ]
 
     if "review_month_name" in df_filtered.columns:
-        # Preserve calendar order
         available_months = sorted(
             df_filtered["review_month_name"].dropna().unique(),
             key=lambda m: month_order.index(m) if m in month_order else 999,
@@ -192,6 +182,7 @@ def apply_filters(df: pd.DataFrame) -> pd.DataFrame:
         df_filtered = df_filtered[df_filtered["review_month_name"] == selected_month]
 
     return df_filtered
+
 
 
 # ---------------------------------------------------------
@@ -277,7 +268,7 @@ def show_sentiment_over_time(df_filtered: pd.DataFrame) -> None:
 
     chart = (
         alt.Chart(monthly)
-        .mark_line(point=True)
+        .mark_line(point=True, color="#d62728")
         .encode(
             x=alt.X("month:T", title="Month"),
             y=alt.Y("neg_rate:Q", title="Proportion Negative", scale=alt.Scale(domain=[0, 1])),
@@ -326,8 +317,6 @@ def show_star_distribution(df_filtered: pd.DataFrame) -> None:
 def show_review_length_distribution(df_filtered: pd.DataFrame) -> None:
     """
     Histogram of review_length_tokens.
-    Business meaning: longer reviews often contain detailed complaints or strong praise.
-    This shows how deeply guests typically engage.
     """
     st.subheader("Review Length Distribution (Tokens)")
 
@@ -357,6 +346,73 @@ def show_review_length_distribution(df_filtered: pd.DataFrame) -> None:
         .properties(height=300)
     )
     st.altair_chart(chart, use_container_width=True)
+
+def show_sentiment_distribution(df_filtered: pd.DataFrame) -> None:
+    """
+    Bar chart of overall sentiment distribution (positive vs negative),
+    where sentiment_from_stars is derived from star ratings
+    (1–3 stars = negative, 4–5 stars = positive).
+
+    Y-axis: number of reviews
+    X-axis: sentiment category (negative / positive)
+    """
+    st.subheader("Sentiment Distribution (Based on Star Ratings)")
+
+    if df_filtered.empty or "sentiment_from_stars" not in df_filtered.columns:
+        st.info("No data available for this view.")
+        return
+
+    # Work on a copy
+    df = df_filtered.copy()
+
+    # Keep only the two categories we care about
+    df = df[df["sentiment_from_stars"].isin(["negative", "positive"])]
+
+    if df.empty:
+        st.info("No data available after filtering to negative/positive sentiment.")
+        return
+
+    agg = (
+        df.groupby("sentiment_from_stars", as_index=False)
+        .size()
+        .rename(columns={"size": "count"})
+    )
+
+    # Fix order: negative then positive
+    agg["sentiment_from_stars"] = pd.Categorical(
+        agg["sentiment_from_stars"],
+        categories=["negative", "positive"],
+        ordered=True,
+    )
+    agg = agg.sort_values("sentiment_from_stars")
+
+    chart = (
+        alt.Chart(agg)
+        .mark_bar()
+        .encode(
+            x=alt.X("sentiment_from_stars:N", title="Sentiment"),
+            y=alt.Y("count:Q", title="Number of Reviews"),
+            color=alt.Color(
+                "sentiment_from_stars:N",
+                title="Sentiment",
+                scale=alt.Scale(
+                    domain=["negative", "positive"],
+                    range=["#e57373", "#81c784"],  # soft red / soft green
+                ),
+            ),
+            tooltip=[
+                alt.Tooltip("sentiment_from_stars:N", title="Sentiment"),
+                alt.Tooltip("count:Q", title="Number of Reviews"),
+            ],
+        )
+        .properties(height=300)
+    )
+
+    st.altair_chart(chart, use_container_width=True)
+    st.caption(
+        "This chart shows the overall distribution of complaints vs positive experiences, "
+        "based on star ratings (1–3★ = negative, 4–5★ = positive)."
+    )
 
 
 def show_recent_negative_reviews(df_filtered: pd.DataFrame) -> None:
@@ -390,7 +446,8 @@ def show_recent_negative_reviews(df_filtered: pd.DataFrame) -> None:
 
 def show_most_liked_reviews(df_filtered: pd.DataFrame) -> None:
     """
-    Show the 20 most liked reviews, highlighting 'hero stories' that marketing can reuse.
+    Show the 20 most liked reviews, highlighting 'hero stories'
+    and high-impact complaints that shape public perception.
     """
     st.subheader("Most Liked Reviews")
 
@@ -606,7 +663,7 @@ def show_live_prediction_ensemble():
 
 
 # ---------------------------------------------------------
-# 6. MAIN APP (two tabs: Live + Static)
+# 6. MAIN APP (three tabs: Live + Static + Prediction)
 # ---------------------------------------------------------
 def main():
     st.set_page_config(
@@ -630,7 +687,7 @@ def main():
     )
 
     # Create tabs
-    tab1, tab2 = st.tabs(["Live Dashboard", "Static Results"])
+    tab1, tab2, tab3 = st.tabs(["Live Dashboard", "Static Results", "Prediction Demo"])
 
     # ---------------- TAB 1: Live Dashboard ----------------
     with tab1:
@@ -662,12 +719,16 @@ def main():
             with bottom_left:
                 show_review_length_distribution(df_filtered)
             with bottom_right:
-                show_recent_negative_reviews(df_filtered)
+                show_sentiment_distribution(df_filtered)
+
+            # Recent negative reviews table (top complaints)
+            show_recent_negative_reviews(df_filtered)
 
             # Full-width most liked table
             show_most_liked_reviews(df_filtered)
 
-        # Live predictor at the bottom
+    # ---------------- TAB 3: Prediction Demo ----------------
+    with tab3:
         show_live_prediction_ensemble()
 
     # ---------------- TAB 2: Static Results ----------------

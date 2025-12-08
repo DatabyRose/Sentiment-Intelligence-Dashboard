@@ -8,9 +8,9 @@ def show_static_results():
 
     plot_files = [
         ("Sentiment by Stars", "static_assets/stage5_sentiment_by_stars_explained.png"),
-        ("Negative Topics", "static_assets/stage5_negative_topics.png"),
-        ("Negative Keywords", "static_assets/stage5_negative_keywords.png"),
-        ("Topics by Stars", "static_assets/stage5_topics_by_stars.png"),
+        ("Key Complaint Topics (Negative Reviews)", "static_assets/stage5_negative_topics.png"),
+        ("Complaint Keywords (What Guests Mention in Complaints)", "static_assets/stage5_negative_keywords.png"),
+        ("Complaint Topics by Star Rating", "static_assets/stage5_topics_by_stars.png"),
     ]
 
     cols = st.columns(2)
@@ -40,15 +40,17 @@ def show_static_results():
 
     st.caption(
         "These visual insights are based on sentiment analysis and topic modeling from customer reviews. "
-        "To update this section, replace the image files in the `static_assets/` folder."
+        "In particular, the complaint topics summarize the key drivers of dissatisfaction across food, "
+        "service, reservations, and price–value perceptions. To update this section, replace the image "
+        "files in the `static_assets/` folder."
     )
 
     # --- CSVs ---
-    st.markdown("### Customer Review Topics (Detailed View)")
+    st.markdown("### Customer Review Complaint Topics (Detailed View)")
 
     csv_files = {
-        "All Topics Across Reviews": "static_assets/stage5_topics.csv",
-        "Topics Split by Star Rating": "static_assets/stage5_topics_by_stars.csv",
+        "All Complaint Topics Across Reviews": "static_assets/stage5_topics.csv",
+        "Complaint Topics Split by Star Rating": "static_assets/stage5_topics_by_stars.csv",
     }
 
     for label, path in csv_files.items():
